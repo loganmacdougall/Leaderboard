@@ -4,7 +4,10 @@
   --background-color: #fbfbfb;
   --dark-color: #492828;
 
-  --color-red: #ca4730;
+  --color-white: #fbfbfb;
+  --color-green: #84934A;
+  --color-red: #c41d00;
+  --color-yellow: #bb9610;
 }
 
 body {

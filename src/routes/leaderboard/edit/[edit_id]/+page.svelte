@@ -1,14 +1,17 @@
 <script lang="ts">
   import HorizontalLeftSection from '$lib/components/HorizontalLeftSection.svelte';
+  import HorizontalMiddleSection from '$lib/components/HorizontalMiddleSection.svelte';
   import LeaderboardKeyboard from './LeaderboardKeyboard.svelte';
 
   let { data } = $props();
-  const { id, edit_id, initial_lb } = data;
+  let id = $derived(data.id);
+  let edit_id = $derived(data.edit_id);
+  let initial_lb = $derived(data.initial_lb);
 
   console.log(id);
 
   let name = $state(initial_lb.name || '');
-  let focus = $state(initial_lb.focus || -1);
+  let focus = $state(initial_lb?.focus ?? -1);
   let round = $state(initial_lb.round || 0);
   let header: string[] = $state(initial_lb.header || []);
   let grids: number[] = $state(initial_lb.grids || []);
@@ -26,21 +29,46 @@
   }
 
   $effect(() => {
-    lb; // re-run effect when lb changes
+    lb;
     pushChanges();
   })
 
-  const setCell = (n: number) => {
+  const setCellValue = (n: number) => {
     if (focus === -1) return;
-    grids[focus] = n;
+    const cell = getCell(focus);
+    if (cell.locked) return;
+    grids[focus] = `U ${n}`;
   }
 
-  const getAddN = (n: number) => {
-    return () => {
-      if (focus === -1) return;
-      const cell = grids[focus];
-      grids[focus] = +cell + n;
+  const getCell = (i: number): {locked: bool, value: number} => {
+    const cell = grids[i];
+    if (cell === undefined || cell === "") {
+      return { locked: false, value: 0 };
     }
+    return {
+      locked: cell.startsWith("L"),
+      value: parseInt(cell.slice(2))
+    };
+  }
+
+  const addNCell = (n: number) => {
+    if (focus === -1) return;
+    const cell = getCell(focus);
+    if (cell.locked) return;
+    grids[focus] = `U ${cell.value + n}`;
+  }
+
+  const timesTwoCell = () => {
+    if (focus === -1) return;
+      const cell = getCell(focus);
+      if (cell.locked) return;
+      grids[focus] = `U ${cell.value * 2}`;
+  }
+
+  const setLock = (locked: bool) => {
+    if (focus === -1) return;
+    const cell = getCell(focus);
+    grids[focus] = `${locked ? "L" : "U"} ${cell.value}`;
   }
 
   const focusDown = () => {
@@ -51,6 +79,12 @@
 
     if (focus !== -1 && focus + header.length < grids.length) {
       focus += header.length;
+    }
+  }
+
+  const focusUp = () => {
+    if (focus !== -1 && focus - header.length >= 0) {
+      focus -= header.length;
     }
   }
 
@@ -106,7 +140,27 @@
     grids = new_grids;
   }
 
+  const popRowAt = (i: number) => {
+    let new_grids = [];
+
+    for (let r = 0; r < Math.ceil(grids.length / header.length); r++) {
+      if (r === i) continue;
+      for (let c = 0; c < header.length; c++) {
+        const index = r * header.length + c;
+        if (index < grids.length) {
+          new_grids.push(grids[index]);
+        }
+      }
+    }
+
+    grids = new_grids;
+  }
+
 </script>
+
+<HorizontalMiddleSection>
+  <p>Viewing ID: {id}</p>
+</HorizontalMiddleSection>
 
 <HorizontalLeftSection>
   <label for="leaderboard_name">Name: </label>
@@ -149,10 +203,16 @@
         <!-- With headers: show grid in rows -->
         {#each { length: Math.ceil(grids.length / header.length) } as _, rowIndex}
           <tr>
-            <td>{rowIndex + 1}</td>
+            <td><button class="header_button" onclick={() => {popRowAt(rowIndex)}}>-</button>{rowIndex + 1}</td>
             {#each header as _, colIndex}
               {@const cellIndex = rowIndex * header.length + colIndex}
-              <td class={cellIndex === focus ? 'focused' : ''} onclick={() => {focus = cellIndex}}>
+              <td class={cellIndex === focus ? 'focused' : ''} onclick={() => {
+                  if (focus === cellIndex) {
+                    focus = -1;
+                  } else {
+                    focus = cellIndex;
+                  }
+                }}>
                 {grids[cellIndex] ?? ''}
               </td>
             {/each}
@@ -163,39 +223,45 @@
   </table>
 </div>
 
+
+
 <LeaderboardKeyboard labels={
-  ["+1", "+2", "+3", "=0", "+4", "+5", "+6", "⬇️", "+7", "+8", "+9", "⬅️", "+10", "+11", "+12", "➡️"]
+  ["+1", "+2", "+3", "=0", "x2", "+4", "+5", "+6", "⬇️", "⬆️", "+7", "+8", "+9", "⬅️", "➡️", "+10", "+11", "+12", "🔒", "🔑"]
 }
 listeners={[
-  getAddN(1),
-  getAddN(2),
-  getAddN(3),
-  () => { setCell(0) },
-  getAddN(4),
-  getAddN(5),
-  getAddN(6),
+  () => { addNCell(1) },
+  () => { addNCell(2) },
+  () => { addNCell(3) },
+  () => { setCellValue(0) },
+  () => { timesTwoCell() },
+  () => { addNCell(4) },
+  () => { addNCell(5) },
+  () => { addNCell(6) },
   focusDown,
-  getAddN(7),
-  getAddN(8),
-  getAddN(9),
+  focusUp,
+  () => { addNCell(7) },
+  () => { addNCell(8) },
+  () => { addNCell(9) },
   focusLeft,
-  getAddN(10),
-  getAddN(11),
-  getAddN(12),
-  focusRight
+  focusRight,
+  () => { addNCell(10) },
+  () => { addNCell(11) },
+  () => { addNCell(12) },
+  () => { setLock(true) },
+  () => { setLock(false) },
 ]} 
-cols={4}
+cols={5}
 label={focus > -1 ? `${header[focus % header.length]}: ${grids[focus]}` : ""}/>
 
 <style>
   body {
-    min-height: 150%;
+    overflow-y: scroll;
   }
 
   .table-container {
     width: 100%;
     overflow-x: auto;
-    margin-bottom: 1rem;
+    margin-bottom: 120%;
   }
 
   table {
@@ -238,7 +304,6 @@ label={focus > -1 ? `${header[focus % header.length]}: ${grids[focus]}` : ""}/>
   }
 
   th, td {
-    min-width: 10rem;
     height: 2.5rem;
     border: 2px solid var(--secondary-color);
     text-align: center;

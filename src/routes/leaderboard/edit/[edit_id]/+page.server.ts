@@ -8,12 +8,7 @@ export async function load({ params }) {
 
   try {
     id = getIdFromEditId(edit_id);
-    const lb_str = getLeaderboardData(id);
-    try {
-      lb = JSON.parse(lb_str);
-    } catch {
-      lb = {};
-    }
+    lb = getLeaderboardData(id);
   } catch (e) {
     throw redirect(307, '/leaderboard/join');
   }

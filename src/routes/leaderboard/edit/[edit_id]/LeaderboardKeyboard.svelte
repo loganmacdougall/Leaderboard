@@ -48,7 +48,7 @@
     align-items: flex-end;
     padding: 0 1rem;
     height: 3.5rem;
-    font-size: 1.8rem;
+    font-size: 1rem;
     box-sizing: border-box;
     background-color: var(--primary-color);
     color: var(--background-color);
@@ -68,9 +68,5 @@
     gap: 0.5rem;
     height: calc(100% - 2rem);
     box-sizing: border-box;
-  }
-
-  button {
-
   }
 </style>
