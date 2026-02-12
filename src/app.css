@@ -1,0 +1,81 @@
+:root {
+  --primary-color: #84934A;
+  --secondary-color: #656D3F;
+  --background-color: #fbfbfb;
+  --dark-color: #492828;
+
+  --color-red: #ca4730;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background-color);
+}
+
+body, button, label, input, select, textarea {
+  font-family: "Bitter", serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+
+h1 {
+  font-weight: 700;
+  font-size: 48px;
+  margin: 0.5rem;
+  text-align: center;
+}
+
+h2 {
+  margin: 0.5rem;
+  font-weight: 700;
+  font-size: 40px;
+}
+
+a {
+  font-size: 24px;
+}
+
+p {
+  font-size: 24px;
+}
+
+section {
+  padding: 1rem 0.5rem;
+  margin: 1rem;
+}
+
+input, select, textarea, button {
+  padding: 0.5rem;
+  border: 4px solid var(--secondary-color);
+  background-color: var(--background-color);
+  border-radius: 4px;
+  font-size: 24px;
+}
+
+button:hover {
+  cursor: pointer;
+  border-color: var(--secondary-color);
+}
+
+@media only screen and (max-width: 600px) {
+  h1 {
+    font-size: 24px;
+  }
+
+  h2 {
+    font-size: 21px;
+  }
+
+  a {
+    font-size: 16px;
+  }
+
+  p {
+    font-size: 16px;
+  }
+
+  input, select, textarea, button {
+    font-size: 16px;
+  }
+}
