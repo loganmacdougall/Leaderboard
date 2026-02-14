@@ -13,7 +13,7 @@
 <div class="keyboard" style="transform: {open ? 'translateY(0)' : 'translateY(calc(100% - 4.5rem))'};">
   <div class="show-button-container">
     <span>{label || ""}</span>
-    <button class="show-button" onclick={() => {open = !open; console.log(open)}}>Show</button>
+    <button class="show-button" onclick={() => {open = !open}}>Show</button>
   </div>
   <div class="keyboard-keys" style="grid-template-columns: repeat({cols}, 1fr);grid-template-rows: repeat({labels.length / cols}, 1fr);">
     {#each labels as label, i}

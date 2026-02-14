@@ -45,8 +45,6 @@
       }
     }
 
-    console.log(focus, focus_row);
-    console.log(p);
     return p.sort((a, b) => b.score - a.score);
   })
   

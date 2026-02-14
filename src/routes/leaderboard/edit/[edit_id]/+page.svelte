@@ -8,8 +8,6 @@
   let edit_id = $derived(data.edit_id);
   let initial_lb = $derived(data.initial_lb);
 
-  console.log(id);
-
   let name = $state(initial_lb.name || '');
   let focus = $state(initial_lb?.focus ?? -1);
   let round = $state(initial_lb.round || 0);
