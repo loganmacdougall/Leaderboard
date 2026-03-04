@@ -2,17 +2,31 @@
   import HorizontalLeftSection from '$lib/components/HorizontalLeftSection.svelte';
   import HorizontalMiddleSection from '$lib/components/HorizontalMiddleSection.svelte';
   import LeaderboardKeyboard from './LeaderboardKeyboard.svelte';
+  import { onMount, tick, untrack } from 'svelte';
 
   let { data } = $props();
   let id = $derived(data.id);
   let edit_id = $derived(data.edit_id);
-  let initial_lb = $derived(data.initial_lb);
+  const initial_lb = $derived(data.initial_lb);
 
-  let name = $state(initial_lb.name || '');
-  let focus = $state(initial_lb?.focus ?? -1);
-  let round = $state(initial_lb.round || 0);
-  let header: string[] = $state(initial_lb.header || []);
-  let grids: number[] = $state(initial_lb.grids || []);
+  let filling_inital_state = $state(true);
+
+  let name = $state('');
+  let focus = $state(-1);
+  let round = $state(0);
+  let header: string[] = $state([]);
+  let grids: string[] = $state([]);
+
+  onMount(async () => {
+      if (initial_lb.name !== undefined) name = initial_lb.name;
+      if (initial_lb.focus !== undefined) focus = initial_lb.focus;
+      if (initial_lb.round !== undefined) round = initial_lb.round;
+      if (initial_lb.header !== undefined) header = initial_lb.header;
+      if (initial_lb.grids !== undefined) grids = initial_lb.grids;
+
+      await tick();
+      filling_inital_state = false;
+  })
 
   let lb = $derived({name, header, grids, focus, round});
 
@@ -28,6 +42,11 @@
 
   $effect(() => {
     lb;
+    
+    if (untrack(() => filling_inital_state)) {
+      return;
+    }
+
     pushChanges();
   })
 
@@ -38,7 +57,7 @@
     grids[focus] = `U ${n}`;
   }
 
-  const getCell = (i: number): {locked: bool, value: number} => {
+  const getCell = (i: number): {locked: boolean, value: number} => {
     const cell = grids[i];
     if (cell === undefined || cell === "") {
       return { locked: false, value: 0 };
@@ -63,7 +82,7 @@
       grids[focus] = `U ${cell.value * 2}`;
   }
 
-  const setLock = (locked: bool) => {
+  const setLock = (locked: boolean) => {
     if (focus === -1) return;
     const cell = getCell(focus);
     grids[focus] = `${locked ? "L" : "U"} ${cell.value}`;
@@ -252,10 +271,6 @@ cols={5}
 label={focus > -1 ? `${header[focus % header.length]}: ${grids[focus]}` : ""}/>
 
 <style>
-  body {
-    overflow-y: scroll;
-  }
-
   .table-container {
     width: 100%;
     overflow-x: auto;

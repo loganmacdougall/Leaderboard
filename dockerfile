@@ -23,6 +23,7 @@ COPY . .
 
 # [optional] tests & build
 ENV NODE_ENV=production
+ENV ORIGIN=http://localhost:3000
 RUN bun run build
 
 # run the app

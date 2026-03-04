@@ -62,7 +62,7 @@ export function updateLeaderboard(edit_id: string, data: string) {
     const update_id = crypto.randomUUID();
     broadcast(id, update_id, data);
 
-    return id;
+    return update_id;
 }
 
 function broadcast(leaderboard_id: string, update_id: string, data: string) {

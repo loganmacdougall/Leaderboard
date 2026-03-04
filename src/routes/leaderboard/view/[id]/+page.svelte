@@ -4,7 +4,7 @@
   import { quintOut } from 'svelte/easing';
 
   let { data } = $props();
-  const { id } = data;
+  const { id } = $derived(data);
 
   let lb: any = $state({});
 
@@ -12,7 +12,7 @@
   let focus = $derived(lb?.focus ?? -1);
   let round = $derived(lb.round || 0);
   let header: string[] = $derived(lb.header || []);
-  let grids: number[] = $derived(lb.grids || []);
+  let grids: string[] = $derived(lb.grids || []);
 
   let rows = $derived(grids.length > 0 && header.length > 0 ? Math.ceil(grids.length / header.length) : 0);
   let focus_row = $derived((focus !== -1 && header.length > 0) ? Math.floor(focus / header.length) : -1);
@@ -20,7 +20,7 @@
   let players = $derived.by(() => {
     if (rows == 0) return [];
 
-    let p: {name: string, score: number, plus: number, locked: bool}[] = [];
+    let p: {name: string, score: number, plus: number, locked: boolean}[] = [];
     for (let c = 0; c < header.length; c++) {
       p.push({name: header[c], score: 0, plus: 0, locked: false});
     }

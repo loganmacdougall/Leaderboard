@@ -10,7 +10,7 @@
   let open = $state(false);
 </script>
 
-<div class="keyboard" style="transform: {open ? 'translateY(0)' : 'translateY(calc(100% - 4.5rem))'};">
+<div class="keyboard" style="transform: {open ? 'translateY(0)' : 'translateY(calc(100% - 3.5rem))'};">
   <div class="show-button-container">
     <span>{label || ""}</span>
     <button class="show-button" onclick={() => {open = !open}}>Show</button>
@@ -40,33 +40,31 @@
     background-color: var(--primary-color);
     color: var(--background-color);
     opacity: 0.90;
+    display: flex;
+    flex-direction: column;
   }
-
   .show-button-container {
     display: flex;
     justify-content: space-between;
-    align-items: flex-end;
-    padding: 0 1rem;
+    align-items: center;
+    padding: 0 1rem 0 1.25rem;
     height: 3.5rem;
+    flex-shrink: 0;
     font-size: 1rem;
     box-sizing: border-box;
     background-color: var(--primary-color);
     color: var(--background-color);
   }
-
   .show-button {
-    position: relative;
-    top: 0.5rem;
-    right: 0.5rem;
     padding: 0.5rem 1rem;
     font-size: 1rem;
   }
-
-  .keyboard-keys {
+.keyboard-keys {
     display: grid;
-    padding: 1rem;
+    padding: 0rem 1rem 1rem 1rem;
     gap: 0.5rem;
-    height: calc(100% - 2rem);
+    flex: 1;
+    min-height: 0;
     box-sizing: border-box;
-  }
+}
 </style>
