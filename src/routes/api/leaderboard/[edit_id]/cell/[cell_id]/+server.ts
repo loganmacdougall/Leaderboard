@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { updateCell } from '$lib/server/leaderboard/data';
 import { getIdFromEditId } from '$lib/server/leaderboard/lookups';
-import { broadcastLeaderboard } from '$lib/server/leaderboard/realtime';
+import { broadcastPatch } from '$lib/server/leaderboard/realtime';
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
   const { edit_id, cell_id } = params;
@@ -15,8 +15,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
   try {
     const cell = await updateCell(edit_id, Number(cell_id), data);
-    const id = await getIdFromEditId(edit_id);
-    await broadcastLeaderboard(id);
+    const leaderboard_id = await getIdFromEditId(edit_id);
+    broadcastPatch(leaderboard_id, { type: 'cell_updated', cell });
 
     return json({ cell }, { status: 200 });
   } catch (e) {

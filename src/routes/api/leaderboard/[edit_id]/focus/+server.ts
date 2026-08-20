@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { updateMetadata } from '$lib/server/leaderboard/data';
-import { broadcastLeaderboard } from '$lib/server/leaderboard/realtime';
+import { broadcastPatch } from '$lib/server/leaderboard/realtime';
 
 export const PATCH: RequestHandler = async ({ params, request }) => {
   const { edit_id } = params;
@@ -13,7 +13,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 
   try {
     const metadata = await updateMetadata(edit_id, data);
-    await broadcastLeaderboard(metadata.leaderboard_id);
+    broadcastPatch(metadata.leaderboard_id, { type: 'metadata', metadata });
 
     return json({ metadata }, { status: 200 });
   } catch (e) {

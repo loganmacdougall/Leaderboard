@@ -45,6 +45,51 @@
     return p.sort((a, b) => b.score - a.score);
   });
 
+  function applyPatch(patch: any) {
+    if (!lb.headers || !lb.rows) return;
+
+    switch (patch.type) {
+      case 'metadata':
+        lb.metadata = patch.metadata;
+        break;
+      case 'header_created':
+        lb.headers.push(patch.header);
+        for (const cell of patch.cells as Cell[]) {
+          const row = lb.rows.find((r) => r.id === cell.leaderboard_row_id);
+          if (row) row.cells.push(cell);
+        }
+        break;
+      case 'header_updated': {
+        const header = lb.headers.find((h) => h.id === patch.header.id);
+        if (header) Object.assign(header, patch.header);
+        break;
+      }
+      case 'header_deleted': {
+        const i = lb.headers.findIndex((h) => h.id === patch.header_id);
+        if (i !== -1) {
+          lb.headers.splice(i, 1);
+          for (const row of lb.rows) row.cells.splice(i, 1);
+        }
+        break;
+      }
+      case 'row_created':
+        lb.rows.push(patch.row);
+        break;
+      case 'row_deleted': {
+        const i = lb.rows.findIndex((r) => r.id === patch.row_id);
+        if (i !== -1) lb.rows.splice(i, 1);
+        break;
+      }
+      case 'cell_updated': {
+        for (const row of lb.rows) {
+          const cell = row.cells.find((c) => c.id === patch.cell.id);
+          if (cell) { Object.assign(cell, patch.cell); break; }
+        }
+        break;
+      }
+    }
+  }
+
   onMount(() => {
     const eventSource = new EventSource(`/api/leaderboard/stream/${id}`);
     let event_data: any;
@@ -54,10 +99,14 @@
         event_data = JSON.parse(event.data);
       } catch (e) {
         console.error('Error parsing SSE data:', e);
-        event_data = {};
+        return;
       }
 
-      lb = event_data.lb || {};
+      if (event_data.lb) {
+        lb = event_data.lb;
+      } else if (event_data.patch) {
+        applyPatch(event_data.patch);
+      }
     };
 
     eventSource.onerror = (error) => {

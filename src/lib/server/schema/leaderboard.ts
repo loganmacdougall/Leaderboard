@@ -1,5 +1,5 @@
 import { SQL, sql } from "drizzle-orm";
-import { integer, uuid, pgTable, varchar, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, uuid, pgTable, varchar, timestamp } from "drizzle-orm/pg-core";
 
 export const leaderboardTable = pgTable("leaderboard", {
   id: uuid("id").primaryKey(),
@@ -23,7 +23,9 @@ export const leaderboardRowTable = pgTable("leaderboard_row", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   display_order: integer("display_order").notNull(),
   leaderboard_id: uuid("leaderboard_id").references(() => leaderboardTable.id,  { onDelete: "cascade" }).notNull(),
-})
+}, (t) => [
+  index("leaderboard_row_leaderboard_id_display_order_idx").on(t.leaderboard_id, t.display_order),
+])
 
 export const leaderboardCellTable = pgTable("leaderboard_cell", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
@@ -38,11 +40,15 @@ export const leaderboardCellTable = pgTable("leaderboard_cell", {
   n8: integer("n8"),
   s: varchar("s", { length: 16 }).default("").notNull(),
   leaderboard_row_id: integer("leaderboard_row_id").references(() => leaderboardRowTable.id,  { onDelete: "cascade" }).notNull(),
-})
+}, (t) => [
+  index("leaderboard_cell_row_id_display_order_idx").on(t.leaderboard_row_id, t.display_order),
+])
 
 export const leaderboardHeaderCellTable = pgTable("leaderboard_header_cell", {
   id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
   display_order: integer("display_order").notNull(),
   s: varchar("s", { length: 128 }).default("").notNull(),
   leaderboard_id: uuid("leaderboard_id").references(() => leaderboardTable.id,  { onDelete: "cascade" }).notNull(),
-})
+}, (t) => [
+  index("leaderboard_header_cell_leaderboard_id_display_order_idx").on(t.leaderboard_id, t.display_order),
+])

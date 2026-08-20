@@ -73,7 +73,7 @@ export async function createHeaderCell(edit_id: string) {
         .execute();
     }
 
-    return { header, cells };
+    return { header, cells, leaderboard_id: id };
   });
 }
 
@@ -112,6 +112,8 @@ export async function deleteHeaderCell(edit_id: string, header_id: number) {
         inArray(leaderboardCellTable.leaderboard_row_id, tx.select({ id: leaderboardRowTable.id }).from(leaderboardRowTable).where(eq(leaderboardRowTable.leaderboard_id, id)))
       ))
       .execute();
+
+    return { leaderboard_id: id, header_id: header.id };
   });
 }
 
@@ -167,7 +169,7 @@ export async function createRow(edit_id: string) {
         .execute();
     }
 
-    return { row: { ...row, cells } };
+    return { row: { ...row, cells }, leaderboard_id: id };
   });
 }
 
@@ -189,6 +191,8 @@ export async function deleteRow(edit_id: string, row_id: number) {
       .set({ display_order: sql`${leaderboardRowTable.display_order} - 1` })
       .where(and(eq(leaderboardRowTable.leaderboard_id, id), gt(leaderboardRowTable.display_order, row.display_order)))
       .execute();
+
+    return { leaderboard_id: id, row_id: row.id };
   });
 }
 
