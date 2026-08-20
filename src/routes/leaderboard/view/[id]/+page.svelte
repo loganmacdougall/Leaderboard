@@ -3,71 +3,68 @@
   import { flip } from 'svelte/animate';
   import { quintOut } from 'svelte/easing';
 
+  type Cell = { id: number; display_order: number; n1: number; n2: number; s: string; leaderboard_row_id: number };
+  type Row = { id: number; display_order: number; cells: Cell[] };
+  type Header = { id: number; display_order: number; s: string };
+
   let { data } = $props();
   const { id } = $derived(data);
 
-  let lb: any = $state({});
+  let lb: { metadata?: { name?: string; focus_row_id?: number | null; focus_header_id?: number | null }; headers?: Header[]; rows?: Row[] } = $state(data.initial_lb);
 
-  let name = $derived(lb.name || 'Leaderboard');
-  let focus = $derived(lb?.focus ?? -1);
-  let round = $derived(lb.round || 0);
-  let header: string[] = $derived(lb.header || []);
-  let grids: string[] = $derived(lb.grids || []);
+  let name = $derived(lb.metadata?.name || 'Leaderboard');
+  let headers: Header[] = $derived(lb.headers || []);
+  let rows: Row[] = $derived(lb.rows || []);
+  let focusRowIndex = $derived(rows.findIndex((r) => r.id === lb.metadata?.focus_row_id));
+  let focusHeaderId = $derived(lb.metadata?.focus_header_id ?? null);
 
-  let rows = $derived(grids.length > 0 && header.length > 0 ? Math.ceil(grids.length / header.length) : 0);
-  let focus_row = $derived((focus !== -1 && header.length > 0) ? Math.floor(focus / header.length) : -1);
-  let focus_player = $derived((focus !== -1 && header.length > 0) ? header[focus % header.length] : "");
+  const cellScore = (cell: Cell) => cell.s.includes('2') ? 2 * cell.n1 + cell.n2 : cell.n1 + cell.n2;
+  const isLocked = (cell: Cell) => cell.s.includes('L');
+
   let players = $derived.by(() => {
-    if (rows == 0) return [];
+    if (headers.length === 0) return [];
 
-    let p: {name: string, score: number, plus: number, locked: boolean}[] = [];
-    for (let c = 0; c < header.length; c++) {
-      p.push({name: header[c], score: 0, plus: 0, locked: false});
-    }
+    const p = headers.map((h) => ({ id: h.id, name: h.s, score: 0, plus: 0, locked: false }));
 
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < header.length; c++) {
-        const index = r * header.length + c;
-        const cell = (grids?.[index] ?? "") === "" ? "U 0" : grids[index];
-        const [status, value] = cell.split(" ");
-        const locked = status === "L";
-        const score = parseInt(value);
+    rows.forEach((row, r) => {
+      row.cells.forEach((cell, c) => {
+        if (!p[c]) return;
+        const score = cellScore(cell);
 
-        if (r > focus_row) {
-          p[c].plus += score;
-        } else if (r === focus_row) {
-          p[c].plus += score;
-          p[c].locked = locked;
-        } else {
+        if (focusRowIndex === -1 || r < focusRowIndex) {
           p[c].score += score;
+        } else if (r === focusRowIndex) {
+          p[c].plus += score;
+          p[c].locked = isLocked(cell);
+        } else {
+          p[c].plus += score;
         }
-
-      }
-    }
+      });
+    });
 
     return p.sort((a, b) => b.score - a.score);
-  })
-  
+  });
+
   onMount(() => {
     const eventSource = new EventSource(`/api/leaderboard/stream/${id}`);
-    let data: any;
+    let event_data: any;
 
     eventSource.onmessage = (event) => {
       try {
-        data = JSON.parse(event.data);
+        event_data = JSON.parse(event.data);
       } catch (e) {
         console.error('Error parsing SSE data:', e);
-        data = {};
+        event_data = {};
       }
 
-      lb = data.lb || {};
+      lb = event_data.lb || {};
     };
-    
+
     eventSource.onerror = (error) => {
       console.error('SSE error:', error);
       eventSource.close();
     };
-    
+
     return () => {
       eventSource.close();
     };
@@ -77,8 +74,8 @@
 
 <h2>{name}</h2>
 <div class="leaderboard">
-{#each players as player, i (player.name)}
-  <div class={`player-row${(player.name === focus_player) ? " focus-player" : ""}`} style={`background-color: var(--color-${player.locked ? "yellow" : "green"});`} animate:flip={{ duration: 1000, easing: quintOut }}>
+{#each players as player, i (player.id)}
+  <div class={`player-row${player.id === focusHeaderId ? " focus-player" : ""}`} style={`background-color: var(--color-${player.locked ? "yellow" : "green"});`} animate:flip={{ duration: 1000, easing: quintOut }}>
     <div>
       <span class="player-rank"><em>{i + 1}.</em></span>
       <span class="player-name">{`${player.name}${player.locked ? " (inactive)" : ""}`}</span>
@@ -147,7 +144,7 @@
     gap: 1rem;
   }
 
-  .player-row {  
+  .player-row {
     font-size: 2.5rem;
   }
 

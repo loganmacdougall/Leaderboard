@@ -2,186 +2,186 @@
   import HorizontalLeftSection from '$lib/components/HorizontalLeftSection.svelte';
   import HorizontalMiddleSection from '$lib/components/HorizontalMiddleSection.svelte';
   import LeaderboardKeyboard from './LeaderboardKeyboard.svelte';
-  import { onMount, tick, untrack } from 'svelte';
+
+  type Cell = { id: number; display_order: number; n1: number; n2: number; s: string; leaderboard_row_id: number };
+  type Row = { id: number; display_order: number; cells: Cell[] };
+  type Header = { id: number; display_order: number; s: string };
 
   let { data } = $props();
-  let id = $derived(data.id);
-  let edit_id = $derived(data.edit_id);
-  const initial_lb = $derived(data.initial_lb);
+  const edit_id: string = data.edit_id;
 
-  let filling_inital_state = $state(true);
+  let name = $state(data.initial_lb.metadata.name as string);
+  let headers: Header[] = $state(data.initial_lb.headers);
+  let rows: Row[] = $state(data.initial_lb.rows);
 
-  let name = $state('');
-  let focus = $state(-1);
-  let round = $state(0);
-  let header: string[] = $state([]);
-  let grids: string[] = $state([]);
+  let focusRow = $state(data.initial_lb.metadata.focus_row_id === null
+    ? -1
+    : rows.findIndex((r: Row) => r.id === data.initial_lb.metadata.focus_row_id));
+  let focusCol = $state(data.initial_lb.metadata.focus_header_id === null
+    ? -1
+    : headers.findIndex((h: Header) => h.id === data.initial_lb.metadata.focus_header_id));
 
-  onMount(async () => {
-      if (initial_lb.name !== undefined) name = initial_lb.name;
-      if (initial_lb.focus !== undefined) focus = initial_lb.focus;
-      if (initial_lb.round !== undefined) round = initial_lb.round;
-      if (initial_lb.header !== undefined) header = initial_lb.header;
-      if (initial_lb.grids !== undefined) grids = initial_lb.grids;
+  const focusedCell = $derived(
+    (focusRow !== -1 && focusCol !== -1) ? rows[focusRow]?.cells[focusCol] : undefined
+  );
 
-      await tick();
-      filling_inital_state = false;
-  })
+  const cellScore = (cell: Cell) => cell.s.includes('2') ? 2 * cell.n1 + cell.n2 : cell.n1 + cell.n2;
+  const isLocked = (cell: Cell) => cell.s.includes('L');
+  const cellLabel = (cell: Cell | undefined) => {
+    if (!cell) return '';
+    return `${cellScore(cell)}${cell.s.includes('2') ? ' x2' : ''}${isLocked(cell) ? ' 🔒' : ''}`;
+  };
 
-  let lb = $derived({name, header, grids, focus, round});
-
-  const pushChanges = () => {
-    fetch(`/api/leaderboard/update`, {
+  async function saveName() {
+    await fetch(`/api/leaderboard/${edit_id}/update_name`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({new_data: lb, edit_id})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
     });
   }
 
-  $effect(() => {
-    lb;
-    
-    if (untrack(() => filling_inital_state)) {
+  async function setFocus(newRow: number, newCol: number) {
+    focusRow = newRow;
+    focusCol = newCol;
+    const focus_row_id = newRow === -1 ? null : rows[newRow]?.id ?? null;
+    const focus_header_id = newCol === -1 ? null : headers[newCol]?.id ?? null;
+    await fetch(`/api/leaderboard/${edit_id}/focus`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ focus_row_id, focus_header_id })
+    });
+  }
+
+  async function selectCell(r: number, c: number) {
+    if (focusRow === r && focusCol === c) {
+      await setFocus(-1, -1);
       return;
     }
 
-    pushChanges();
-  })
-
-  const setCellValue = (n: number) => {
-    if (focus === -1) return;
-    const cell = getCell(focus);
-    if (cell.locked) return;
-    grids[focus] = `U ${n}`;
+    await setFocus(r, c);
   }
 
-  const getCell = (i: number): {locked: boolean, value: number} => {
-    const cell = grids[i];
-    if (cell === undefined || cell === "") {
-      return { locked: false, value: 0 };
-    }
-    return {
-      locked: cell.startsWith("L"),
-      value: parseInt(cell.slice(2))
-    };
+  async function patchCell(cell: Cell, patch: Partial<Pick<Cell, 'n1' | 'n2' | 's'>>) {
+    Object.assign(cell, patch);
+    await fetch(`/api/leaderboard/${edit_id}/cell/${cell.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
   }
 
   const addNCell = (n: number) => {
-    if (focus === -1) return;
-    const cell = getCell(focus);
-    if (cell.locked) return;
-    grids[focus] = `U ${cell.value + n}`;
-  }
+    const cell = focusedCell;
+    if (!cell || isLocked(cell)) return;
+    patchCell(cell, { n1: cell.n1 + n });
+  };
 
-  const timesTwoCell = () => {
-    if (focus === -1) return;
-      const cell = getCell(focus);
-      if (cell.locked) return;
-      grids[focus] = `U ${cell.value * 2}`;
-  }
+  const setCellZero = () => {
+    const cell = focusedCell;
+    if (!cell || isLocked(cell)) return;
+    patchCell(cell, { n1: 0, n2: 0 });
+  };
+
+  const toggleX2 = () => {
+    const cell = focusedCell;
+    if (!cell || isLocked(cell)) return;
+    patchCell(cell, { s: cell.s.includes('2') ? cell.s.replace('2', '') : cell.s + '2' });
+  };
 
   const setLock = (locked: boolean) => {
-    if (focus === -1) return;
-    const cell = getCell(focus);
-    grids[focus] = `${locked ? "L" : "U"} ${cell.value}`;
+    const cell = focusedCell;
+    if (!cell) return;
+    const base = cell.s.replace('L', '');
+    patchCell(cell, { s: locked ? base + 'L' : base });
+  };
+
+  async function addRow() {
+    const res = await fetch(`/api/leaderboard/${edit_id}/row`, { method: 'POST' });
+    if (!res.ok) return;
+    const { row } = await res.json();
+    rows.push(row);
+    return row;
   }
 
-  const focusDown = () => {
-    if ((focus === -1 && grids.length === 0) || focus + header.length >= grids.length) {
-      grids.push(...Array(header.length).fill(""));
-      focus = grids.length - header.length;
+  const focusDown = async () => {
+    if (focusRow === -1) {
+      if (rows.length === 0) await addRow();
+      const col = focusCol === -1 ? (headers.length > 0 ? 0 : -1) : focusCol;
+      await setFocus(0, col);
+      return;
     }
 
-    if (focus !== -1 && focus + header.length < grids.length) {
-      focus += header.length;
-    }
-  }
-
-  const focusUp = () => {
-    if (focus !== -1 && focus - header.length >= 0) {
-      focus -= header.length;
-    }
-  }
-
-  const focusLeft = () => {
-    if (focus === -1) return;
-    if (focus % header.length !== 0) {
-      focus -= 1;
-    } else {
-      focus += header.length - 1;
-    }
-  }
-
-  const focusRight = () => {
-    if (focus === -1) return;
-    if (focus % header.length !== header.length - 1) {
-      focus += 1;
-    } else {
-      focus -= header.length - 1;
-    }
-  }
-
-  const pushHeader = () => {
-    header.push('');
-    const new_index = header.length - 1;
-
-    let new_grids = [];
-
-    for (let r = 0; r < Math.ceil(grids.length / (header.length - 1)); r++) {
-      for (let c = 0; c < header.length; c++) {
-        const index = r * (header.length - 1) + c;
-        if (c === new_index) {
-          new_grids.push("");
-        } else if (index < grids.length) {
-          new_grids.push(grids[index]);
-        }
-      }
+    if (focusRow === rows.length - 1) {
+      await addRow();
     }
 
-    grids = new_grids;
-  }
+    await setFocus(focusRow + 1, focusCol);
+  };
 
-  const popHeaderAt = (i: number) => {
-    let new_grids = [];
+  const focusUp = async () => {
+    if (focusRow > 0) await setFocus(focusRow - 1, focusCol);
+  };
 
-    for (let i = 0; i < grids.length; i++) {
-      if (i % header.length !== i) {
-        new_grids.push(grids[i]);
-      }
+  const focusLeft = async () => {
+    if (focusCol === -1 || headers.length === 0) return;
+    await setFocus(focusRow, focusCol > 0 ? focusCol - 1 : headers.length - 1);
+  };
+
+  const focusRight = async () => {
+    if (focusCol === -1 || headers.length === 0) return;
+    await setFocus(focusRow, focusCol < headers.length - 1 ? focusCol + 1 : 0);
+  };
+
+  const addHeader = async () => {
+    const res = await fetch(`/api/leaderboard/${edit_id}/header`, { method: 'POST' });
+    if (!res.ok) return;
+    const { header, cells } = await res.json();
+    headers.push(header);
+    for (const cell of cells as Cell[]) {
+      const row = rows.find((r) => r.id === cell.leaderboard_row_id);
+      if (row) row.cells.push(cell);
     }
+  };
 
-    header.splice(i, 1);
+  const removeHeaderAt = async (i: number) => {
+    const header = headers[i];
+    const res = await fetch(`/api/leaderboard/${edit_id}/header/${header.id}`, { method: 'DELETE' });
+    if (!res.ok) return;
 
-    grids = new_grids;
-  }
+    headers.splice(i, 1);
+    for (const row of rows) row.cells.splice(i, 1);
 
-  const popRowAt = (i: number) => {
-    let new_grids = [];
+    if (focusCol === i) focusCol = -1;
+    else if (focusCol > i) focusCol -= 1;
+  };
 
-    for (let r = 0; r < Math.ceil(grids.length / header.length); r++) {
-      if (r === i) continue;
-      for (let c = 0; c < header.length; c++) {
-        const index = r * header.length + c;
-        if (index < grids.length) {
-          new_grids.push(grids[index]);
-        }
-      }
-    }
+  const renameHeader = async (i: number) => {
+    const header = headers[i];
+    await fetch(`/api/leaderboard/${edit_id}/header/${header.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ s: header.s })
+    });
+  };
 
-    grids = new_grids;
-  }
+  const removeRowAt = async (i: number) => {
+    const row = rows[i];
+    const res = await fetch(`/api/leaderboard/${edit_id}/row/${row.id}`, { method: 'DELETE' });
+    if (!res.ok) return;
 
+    rows.splice(i, 1);
+    if (focusRow === i) { focusRow = -1; focusCol = -1; }
+    else if (focusRow > i) focusRow -= 1;
+  };
 </script>
 
 <HorizontalMiddleSection>
-  <p>Viewing ID: {id}</p>
+  <p>Share this code to let others view: <strong>{data.view_id}</strong></p>
 </HorizontalMiddleSection>
 
 <HorizontalLeftSection>
   <label for="leaderboard_name">Name: </label>
-  <input id="leaderboard_name" type="text" bind:value={name}>
+  <input id="leaderboard_name" type="text" bind:value={name} oninput={saveName}>
 </HorizontalLeftSection>
 
 <div class="table-container">
@@ -190,52 +190,35 @@
       <tr>
         <th>
           <div style="display: flex; flex-direction: row;">
-            <button class="header_button" onclick={pushHeader}>+</button>
+            <button class="header_button" onclick={addHeader}>+</button>
             <button class="header_button" onclick={focusDown}>⬇️</button>
           </div>
         </th>
-        {#each header as _, i}
-          <th><button class="header_button" onclick={() => {popHeaderAt(i)}}>-</button></th>
+        {#each headers as _, i}
+          <th><button class="header_button" onclick={() => { removeHeaderAt(i) }}>-</button></th>
         {/each}
       </tr>
     </thead>
     <thead>
       <tr>
         <th>Round</th>
-        {#each header as cell, i}
-          <th><input bind:value={header[i]} /></th>
+        {#each headers as header, i}
+          <th><input bind:value={headers[i].s} oninput={() => renameHeader(i)} /></th>
         {/each}
       </tr>
     </thead>
     <tbody>
-      {#if header.length === 0}
-        <!-- No headers: show each grid item as its own row -->
-        {#each grids as cell, i}
-          <tr class={i === focus ? 'focused' : ''}>
-            <td>{i + 1}</td>
-            <td>{cell}</td>
-          </tr>
-        {/each}
-      {:else}
-        <!-- With headers: show grid in rows -->
-        {#each { length: Math.ceil(grids.length / header.length) } as _, rowIndex}
-          <tr>
-            <td><button class="header_button" onclick={() => {popRowAt(rowIndex)}}>-</button>{rowIndex + 1}</td>
-            {#each header as _, colIndex}
-              {@const cellIndex = rowIndex * header.length + colIndex}
-              <td class={cellIndex === focus ? 'focused' : ''} onclick={() => {
-                  if (focus === cellIndex) {
-                    focus = -1;
-                  } else {
-                    focus = cellIndex;
-                  }
-                }}>
-                {grids[cellIndex] ?? ''}
-              </td>
-            {/each}
-          </tr>
-        {/each}
-      {/if}
+      {#each rows as row, rowIndex}
+        <tr>
+          <td><button class="header_button" onclick={() => { removeRowAt(rowIndex) }}>-</button>{rowIndex + 1}</td>
+          {#each headers as _, colIndex}
+            {@const cell = row.cells[colIndex]}
+            <td class={rowIndex === focusRow && colIndex === focusCol ? 'focused' : ''} onclick={() => { selectCell(rowIndex, colIndex) }}>
+              {cell ? cellLabel(cell) : ''}
+            </td>
+          {/each}
+        </tr>
+      {/each}
     </tbody>
   </table>
 </div>
@@ -249,8 +232,8 @@ listeners={[
   () => { addNCell(1) },
   () => { addNCell(2) },
   () => { addNCell(3) },
-  () => { setCellValue(0) },
-  () => { timesTwoCell() },
+  () => { setCellZero() },
+  () => { toggleX2() },
   () => { addNCell(4) },
   () => { addNCell(5) },
   () => { addNCell(6) },
@@ -266,9 +249,9 @@ listeners={[
   () => { addNCell(12) },
   () => { setLock(true) },
   () => { setLock(false) },
-]} 
+]}
 cols={5}
-label={focus > -1 ? `${header[focus % header.length]}: ${grids[focus]}` : ""}/>
+label={focusedCell ? `${headers[focusCol]?.s}: ${cellLabel(focusedCell)}` : ""}/>
 
 <style>
   .table-container {

@@ -1,26 +1,22 @@
-import type { RequestHandler } from '../$types';
-import { getLeaderboardData, subscribeToLeaderboard } from "$lib/server/leaderboard";
+import type { RequestHandler } from './$types';
+import { getData } from '$lib/server/leaderboard/data';
+import { addSubscriber, removeSubscriber } from '$lib/server/leaderboard/subscribers';
 
-let createLeaderboardStream = (id: string) => {
-  let lb: string;
+const createLeaderboardStream = (id: string) => {
+  let subscribed: ReadableStreamDefaultController<string> | null = null;
 
-  try {
-    lb = getLeaderboardData(id);
-  } catch (e) {
-    throw new Error("Leaderboard not found");
-  }
+  return new ReadableStream<string>({
+    async start(controller) {
+      const lb = await getData(id);
+      controller.enqueue(`data: ${JSON.stringify({ lb })}\n\n`);
 
-  const stream = new ReadableStream<string>({
-    start(controller) {
-      const unsubscribe = subscribeToLeaderboard(id, controller);
-      controller.enqueue(`data: ${JSON.stringify({lb})}\n\n`);
-
-      return unsubscribe;
+      subscribed = controller;
+      addSubscriber(id, controller);
     },
-    cancel() {}
+    cancel() {
+      if (subscribed) removeSubscriber(id, subscribed);
+    }
   });
-
-  return stream;
 }
 
 export const GET: RequestHandler = ({ params }) => {
