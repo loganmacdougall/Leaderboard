@@ -6,9 +6,10 @@
 
 <style>
   section {
-    background-color: var(--primary-color);
-    color: var(--background-color);
-    box-shadow: 0px 6px 6px rgba(0, 0, 0, 0.25);
-    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.35rem;
   }
 </style>

@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import HorizontalLeftSection from '$lib/components/HorizontalLeftSection.svelte';
-  import HorizontalMiddleSection from '$lib/components/HorizontalMiddleSection.svelte';
   import LeaderboardKeyboard, { type KeyboardButtonSpec } from './LeaderboardKeyboard.svelte';
   import { createSandbox, destroySandbox, runButtonHandler, runCellLabelFunction, type Sandbox, type ButtonSnapshot } from '$lib/sandbox';
 
@@ -98,6 +96,45 @@
     await setFocus(r, c);
   }
 
+  let tableContainerEl: HTMLElement | undefined = $state();
+
+  // A trackpad/mouse wheel only produces vertical delta by default, and the page itself
+  // has nothing to scroll vertically past the table, so without this a desktop user has
+  // no way to reach columns off to the side short of Shift+scroll or dragging a thin
+  // scrollbar. Redirect vertical wheel input into horizontal scroll while the pointer is
+  // over the table and there's actually overflow to scroll.
+  function handleTableWheel(e: WheelEvent) {
+    if (!tableContainerEl) return;
+    if (tableContainerEl.scrollWidth <= tableContainerEl.clientWidth) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    tableContainerEl.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+
+  // Runs whenever focus moves — from a tap as well as from keyboard-driven nav (arrow
+  // buttons can move focus off-screen, e.g. many rounds/players away). scrollIntoView
+  // handles the horizontal case (.table-container is the nearest x-scrollable ancestor)
+  // and vertical cases where the cell is above/below the viewport entirely, but it has
+  // no idea the on-screen keyboard is a fixed panel covering the bottom half of the
+  // viewport, so a cell it considers "visible" can still be physically hidden under it —
+  // hence the extra nudge below.
+  $effect(() => {
+    const row = focusRow;
+    const col = focusCol;
+    if (row === -1 || col === -1 || !tableContainerEl) return;
+    const cellEl = tableContainerEl.querySelector<HTMLElement>(`[data-row="${row}"][data-col="${col}"]`);
+    if (!cellEl) return;
+
+    cellEl.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+    requestAnimationFrame(() => {
+      const rect = cellEl.getBoundingClientRect();
+      const keyboardTop = window.innerHeight * 0.5;
+      if (rect.bottom > keyboardTop) {
+        window.scrollBy({ top: rect.bottom - keyboardTop + 16, behavior: 'smooth' });
+      }
+    });
+  });
+
   async function patchCell(cell: Cell, patch: Record<string, number | string>) {
     Object.assign(cell, patch);
     await fetch(`/api/leaderboard/${edit_id}/cell/${cell.id}`, {
@@ -171,16 +208,26 @@
     }
   }
 
+  // A fast double-click/double-tap fires two click events before the first request's
+  // response comes back, which without a guard sends two POSTs and adds two players.
+  let addingHeader = $state(false);
+
   const addHeader = async () => {
-    const res = await fetch(`/api/leaderboard/${edit_id}/header`, { method: 'POST' });
-    if (!res.ok) return;
-    const { header, cells } = await res.json();
-    headers.push(header);
-    for (const cell of cells as Cell[]) {
-      const row = rows.find((r) => r.id === cell.leaderboard_row_id);
-      if (row) row.cells.push(cell);
+    if (addingHeader) return;
+    addingHeader = true;
+    try {
+      const res = await fetch(`/api/leaderboard/${edit_id}/header`, { method: 'POST' });
+      if (!res.ok) return;
+      const { header, cells } = await res.json();
+      headers.push(header);
+      for (const cell of cells as Cell[]) {
+        const row = rows.find((r) => r.id === cell.leaderboard_row_id);
+        if (row) row.cells.push(cell);
+      }
+      for (const cell of cells as Cell[]) refreshLabel(cell);
+    } finally {
+      addingHeader = false;
     }
-    for (const cell of cells as Cell[]) refreshLabel(cell);
   };
 
   const removeHeaderAt = async (i: number) => {
@@ -215,51 +262,64 @@
   };
 </script>
 
-<HorizontalMiddleSection>
-  <p>Share this code to let others view: <strong>{data.view_id}</strong></p>
-</HorizontalMiddleSection>
+<div class="edit-page">
+  <div class="share-banner">
+    <span class="share-label">Share this code to view live</span>
+    <span class="share-code">{data.view_id}</span>
+  </div>
 
-<HorizontalLeftSection>
-  <label for="leaderboard_name">Name: </label>
-  <input id="leaderboard_name" type="text" bind:value={name} oninput={saveName}>
-</HorizontalLeftSection>
+  <input
+    id="leaderboard_name"
+    class="title-input"
+    type="text"
+    bind:value={name}
+    oninput={saveName}
+    placeholder="Leaderboard name"
+  >
 
-<div class="table-container">
-  <table>
-    <thead>
-      <tr>
-        <th>
-          <div style="display: flex; flex-direction: row;">
-            <button class="header_button" onclick={addHeader}>+</button>
-          </div>
-        </th>
-        {#each headers as _, i}
-          <th><button class="header_button" onclick={() => { removeHeaderAt(i) }}>-</button></th>
-        {/each}
-      </tr>
-    </thead>
-    <thead>
-      <tr>
-        <th>Round</th>
-        {#each headers as header, i}
-          <th><input bind:value={headers[i].s} oninput={() => renameHeader(i)} /></th>
-        {/each}
-      </tr>
-    </thead>
-    <tbody>
-      {#each rows as row, rowIndex}
+  <div class="table-container" bind:this={tableContainerEl} onwheel={handleTableWheel}>
+    <table>
+      <thead>
         <tr>
-          <td><button class="header_button" onclick={() => { removeRowAt(rowIndex) }}>-</button>{rowIndex + 1}</td>
-          {#each headers as _, colIndex}
-            {@const cell = row.cells[colIndex]}
-            <td class={rowIndex === focusRow && colIndex === focusCol ? 'focused' : ''} onclick={() => { selectCell(rowIndex, colIndex) }}>
-              {cell ? cellLabel(cell) : ''}
-            </td>
+          <th class="corner">
+            <button class="icon-button add" onclick={addHeader} disabled={addingHeader} title="Add player">+</button>
+          </th>
+          {#each headers as _, i}
+            <th><button class="icon-button remove" onclick={() => { removeHeaderAt(i) }} title="Remove player">×</button></th>
           {/each}
         </tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <thead>
+        <tr>
+          <th class="corner">Round</th>
+          {#each headers as header, i}
+            <th><input class="player-name-input" size="1" bind:value={headers[i].s} oninput={() => renameHeader(i)} placeholder="Player {i + 1}" /></th>
+          {/each}
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as row, rowIndex}
+          <tr>
+            <td class="row-head">
+              <button class="icon-button remove small" onclick={() => { removeRowAt(rowIndex) }} title="Remove round">×</button>
+              {rowIndex + 1}
+            </td>
+            {#each headers as _, colIndex}
+              {@const cell = row.cells[colIndex]}
+              <td
+                class={rowIndex === focusRow && colIndex === focusCol ? 'cell focused' : 'cell'}
+                data-row={rowIndex}
+                data-col={colIndex}
+                onclick={() => { selectCell(rowIndex, colIndex) }}
+              >
+                {cell ? cellLabel(cell) : ''}
+              </td>
+            {/each}
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 {#if activeKeyboard}
@@ -268,63 +328,205 @@
     columns={activeKeyboard.columns}
     rows={activeKeyboard.rows}
     onPress={onButtonPress}
-    label={focusedCell ? `${headers[focusCol]?.s}: ${cellLabel(focusedCell)}` : ""}
+    label={focusedCell ? `${headers[focusCol]?.s}: ${cellLabel(focusedCell)}` : "Tap a cell to begin"}
   />
 {/if}
 
 <style>
+  .edit-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 0;
+  }
+
+  .share-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    background-color: var(--surface-alt);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  .share-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
+  .share-code {
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    background-color: var(--surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.2rem 0.6rem;
+  }
+
+  .title-input {
+    display: block;
+    width: 100%;
+    border: 1.5px solid transparent;
+    background: none;
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 1.25rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .title-input:hover {
+    border-color: var(--border-color);
+  }
+
+  .title-input:focus-visible {
+    border-color: var(--accent);
+    background-color: var(--surface);
+  }
+
   .table-container {
+    /* Matches the title input / share banner's width as a floor — a table with only a
+       couple of columns still shouldn't look like a tiny orphaned box on an otherwise
+       full-width page. The <table> inside keeps width:max-content (no min-width of its
+       own), so a small table just sits left-aligned with blank space to its right
+       rather than having its columns stretched to fill this width. Once the table's
+       natural content needs more room than this, it grows the container up to 100% of
+       .edit-page and overflow-x scrolls the rest — same as before. */
     width: 100%;
     overflow-x: auto;
-    margin-bottom: 120%;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 55vh;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
   }
 
   table {
     box-sizing: border-box;
-    transform: translateX(0.5rem);
-    min-width: calc(100% - 1rem);
+    /* width:max-content makes the table size itself to its content's natural width —
+       respecting each cell's min-width — instead of a percentage that some mobile
+       browsers resolve against the container and then clip/squish rather than overflow.
+       .table-container's overflow-x scrolls once the table exceeds it. */
+    width: max-content;
     border-collapse: collapse;
-    table-layout: fixed;
-    overflow-x: auto;
+    background-color: var(--surface);
   }
 
-  table input {
+  .player-name-input {
     width: 100%;
+    /* Text inputs have a browser-default intrinsic minimum width that's wider than our
+       column min-width — without zeroing it, the input (not our CSS) ends up dictating
+       how narrow a column can get. */
+    min-width: 0;
     height: 100%;
     box-sizing: border-box;
     border: none;
     background: none;
     text-align: center;
+    font-weight: 700;
+    color: var(--text-primary);
+    border-radius: 0;
   }
 
-  table button {
-    width: 3rem;
-    height: 3rem;
-    margin: 0.25rem;
-    border: 1px solid var(--dark-color);
-    box-shadow: 2px 2px 2px 0 var(--dark-color);
-    background-color: var(--background-color);
-    text-align: center;
-    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+  .icon-button {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-weight: 700;
+    line-height: 1;
+    border: 1px solid var(--border-color);
+    background-color: var(--surface);
+    color: var(--text-secondary);
   }
 
-  table button:hover {
-    transform: translate(-2px, -2px);
-    box-shadow: 4px 4px 4px var(--dark-color);
+  .icon-button.small {
+    width: 1.4rem;
+    height: 1.4rem;
+    font-size: 0.75rem;
+    margin-right: 0.35rem;
   }
 
-  table button:active {
-    transform: translate(2px, 2px);
-    box-shadow: 0 0 0 var(--dark-color);
+  .icon-button.add {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .icon-button.add:hover {
+    background-color: var(--accent);
+    color: var(--text-on-accent);
+  }
+
+  .icon-button.remove:hover {
+    background-color: var(--color-red);
+    border-color: var(--color-red);
+    color: var(--text-on-accent);
   }
 
   th, td {
-    height: 2.5rem;
-    border: 2px solid var(--secondary-color);
+    height: 2.75rem;
+    min-width: 5.25rem;
+    padding: 0 0.4rem;
+    border: 1px solid var(--border-color);
     text-align: center;
+    font-size: 0.95rem;
+  }
+
+  th.corner, .row-head {
+    min-width: 2.5rem;
+  }
+
+  th.corner {
+    background-color: var(--surface-alt);
+    color: var(--text-secondary);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+
+  thead th {
+    background-color: var(--surface-alt);
+  }
+
+  .row-head {
+    background-color: var(--surface-alt);
+    color: var(--text-secondary);
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+
+  .cell {
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+  }
+
+  .cell:hover {
+    background-color: var(--surface-alt);
   }
 
   .focused {
-    box-shadow: inset 0 0 3px 3px var(--primary-color);
+    background-color: rgba(79, 70, 229, 0.08);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+
+  @media only screen and (max-width: 600px) {
+    /* Slightly wider than the desktop floor — on a phone, a cramped column is worse
+       than needing one extra swipe to scroll to the next player. */
+    th, td {
+      min-width: 6.5rem;
+    }
   }
 </style>

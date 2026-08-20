@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '$lib/components/Icon.svelte';
+
   export type KeyboardButtonSpec = {
     id: number;
     name: string;
@@ -18,6 +20,10 @@
   };
 
   let { buttons, columns, rows, onPress, label }: Props = $props();
+
+  // A button's `icon` is either a known icon keyword (rendered as a proper line icon)
+  // or a plain label (numbers, "=0", "x2", "Bonus →", ...) rendered as text.
+  const ICON_KEYWORDS = new Set(['arrow-down', 'arrow-up', 'arrow-left', 'arrow-right', 'lock', 'unlock', 'backspace']);
   // Open by default: this keyboard exists so a dealer can score at the pace cards are
   // being flipped — making them tap "Show" on every page load would work against that.
   let open = $state(true);
@@ -41,7 +47,15 @@
         class="key"
         style="grid-column: {gridColumn(button.position)} / span {button.width}; grid-row: {gridRow(button.position)} / span {button.height};"
         onclick={() => onPress(button)}
-      >{button.icon}</button>
+        aria-label={button.name}
+        title={button.name}
+      >
+        {#if ICON_KEYWORDS.has(button.icon)}
+          <Icon name={button.icon} size={22} />
+        {:else}
+          {button.icon}
+        {/if}
+      </button>
     {/each}
   </div>
 </div>
@@ -50,20 +64,17 @@
   .keyboard {
     position: fixed;
     bottom: 0;
-    width: calc(100% - 1rem);
+    left: 0;
+    right: 0;
+    width: 100%;
     height: 50%;
-    margin: 0 0.5rem;
     box-sizing: border-box;
-    border: 4px solid var(--secondary-color);
-    border-radius: 1rem;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    border-bottom: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     overflow: hidden;
     transition: transform 0.3s ease-in-out;
-    background-color: var(--primary-color);
-    color: var(--background-color);
-    opacity: 0.90;
+    background-color: var(--dark-color);
+    color: var(--color-white);
+    box-shadow: var(--shadow-lg);
     display: flex;
     flex-direction: column;
   }
@@ -72,20 +83,28 @@
     justify-content: space-between;
     align-items: center;
     padding: 0 1rem 0 1.25rem;
-    height: 3.5rem;
+    height: 3.25rem;
     flex-shrink: 0;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
     box-sizing: border-box;
-    background-color: var(--primary-color);
-    color: var(--background-color);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
   .show-button {
-    padding: 0.5rem 1rem;
-    font-size: 1rem;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-white);
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .show-button:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.15);
   }
 .keyboard-keys {
     display: grid;
-    padding: 0rem 1rem 1rem 1rem;
+    padding: 0.75rem;
     gap: 0.5rem;
     flex: 1;
     min-height: 0;
@@ -96,16 +115,32 @@
    text selection or callout on a long press, immediate visual feedback on tap so a
    dealer entering scores at speed can trust a press registered without looking twice. */
 .key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 44px;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     user-select: none;
-    transition: transform 0.1s ease-out, box-shadow 0.1s ease-out;
+    border: none;
+    border-radius: var(--radius-sm);
+    background-color: var(--key-bg);
+    color: var(--color-white);
+    font-weight: 700;
+    font-size: 1.05rem;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 2px 4px rgba(0, 0, 0, 0.25);
+    transition: transform 0.1s ease-out, box-shadow 0.1s ease-out, background-color 0.1s ease-out;
+}
+
+.key:hover {
+    background-color: var(--key-bg-hover);
+    border-color: transparent;
 }
 
 .key:active {
     transform: scale(0.94);
-    box-shadow: inset 0 0 0 3px var(--background-color);
+    background-color: var(--accent);
+    box-shadow: none;
 }
 </style>

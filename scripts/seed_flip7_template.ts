@@ -83,11 +83,11 @@ function computeScore(cell) {
 }
 
 // What the editor's grid shows for a cell: locked cells collapse to their final score
-// plus a lock emoji (nothing more to enter, no need to show the breakdown); active
+// plus a "locked" note (nothing more to enter, no need to show the breakdown); active
 // cells show the base score (with an x2 marker if doubling is active) and the bonus
 // amount in parens if any bonus has been entered yet.
 function getCellLabel(cell) {
-  if (isLocked(cell)) return computeScore(cell) + ' \u{1F512}';
+  if (isLocked(cell)) return computeScore(cell) + ' • locked';
   var doubled = cell.s.indexOf('2') !== -1;
   var label = String(cell.n1) + (doubled ? ' x2' : '');
   if (cell.n2) label += ' (+' + cell.n2 + ')';
@@ -105,6 +105,12 @@ function getColor(player) {
 function getText(player) {
   return isPlayerLocked(player) ? '(inactive)' : '';
 }
+
+// A locked-in 0 for the round (a bust) is worth calling out — show "+0" in red instead
+// of hiding it like a plain not-yet-scored round.
+function getPlusZeroColor(player) {
+  return isPlayerLocked(player) ? 'var(--color-red)' : null;
+}
 `;
 
 async function main() {
@@ -115,13 +121,13 @@ async function main() {
     { name: '1', icon: '1', handler_name: 'onPress_add1', position: 0 },
     { name: '2', icon: '2', handler_name: 'onPress_add2', position: 1 },
     { name: '3', icon: '3', handler_name: 'onPress_add3', position: 2 },
-    { name: 'Down', icon: '⬇️', handler_name: 'onPress_down', position: 3 },
-    { name: 'Unlock', icon: '🔑', handler_name: 'onPress_unlock', position: 4 },
+    { name: 'Down', icon: 'arrow-down', handler_name: 'onPress_down', position: 3 },
+    { name: 'Unlock', icon: 'unlock', handler_name: 'onPress_unlock', position: 4 },
 
     { name: '4', icon: '4', handler_name: 'onPress_add4', position: 5 },
     { name: '5', icon: '5', handler_name: 'onPress_add5', position: 6 },
     { name: '6', icon: '6', handler_name: 'onPress_add6', position: 7 },
-    { name: 'Lock', icon: '🔒', handler_name: 'onPress_lock', position: 8 },
+    { name: 'Lock', icon: 'lock', handler_name: 'onPress_lock', position: 8 },
     { name: 'Clear', icon: '=0', handler_name: 'onPress_clearAll', position: 9 },
 
     { name: '7', icon: '7', handler_name: 'onPress_add7', position: 10 },
@@ -133,8 +139,8 @@ async function main() {
     { name: '10', icon: '10', handler_name: 'onPress_add10', position: 15 },
     { name: '11', icon: '11', handler_name: 'onPress_add11', position: 16 },
     { name: '12', icon: '12', handler_name: 'onPress_add12', position: 17 },
-    { name: 'Left', icon: '⬅️', handler_name: 'onPress_left', position: 18 },
-    { name: 'Right', icon: '➡️', handler_name: 'onPress_right', position: 19 }
+    { name: 'Left', icon: 'arrow-left', handler_name: 'onPress_left', position: 18 },
+    { name: 'Right', icon: 'arrow-right', handler_name: 'onPress_right', position: 19 }
   ];
 
   // 4x2 grid with no leftover gap: "back" spans the two trailing cells of the second

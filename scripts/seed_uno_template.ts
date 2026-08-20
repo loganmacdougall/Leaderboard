@@ -61,7 +61,7 @@ function getCellLabel(cell) { return String(cell.n1); }
 function getSortDirection() { return 'asc'; }
 
 function getColor(player) { return player.rank === 1 ? 'var(--color-yellow)' : 'var(--color-green)'; }
-function getText(player) { return player.rank === 1 ? '🏆 leading' : ''; }
+function getText(player) { return player.rank === 1 ? 'Leading' : ''; }
 `;
 
 // Simple calculator keypad — no sign toggle needed, Uno round scores are never negative.
@@ -69,22 +69,22 @@ const buttons = [
   { name: '1', icon: '1', handler_name: 'onPress_digit1', position: 0 },
   { name: '2', icon: '2', handler_name: 'onPress_digit2', position: 1 },
   { name: '3', icon: '3', handler_name: 'onPress_digit3', position: 2 },
-  { name: 'Down', icon: '⬇️', handler_name: 'onPress_down', position: 3 },
+  { name: 'Down', icon: 'arrow-down', handler_name: 'onPress_down', position: 3 },
 
   { name: '4', icon: '4', handler_name: 'onPress_digit4', position: 4 },
   { name: '5', icon: '5', handler_name: 'onPress_digit5', position: 5 },
   { name: '6', icon: '6', handler_name: 'onPress_digit6', position: 6 },
-  { name: 'Up', icon: '⬆️', handler_name: 'onPress_up', position: 7 },
+  { name: 'Up', icon: 'arrow-up', handler_name: 'onPress_up', position: 7 },
 
   { name: '7', icon: '7', handler_name: 'onPress_digit7', position: 8 },
   { name: '8', icon: '8', handler_name: 'onPress_digit8', position: 9 },
   { name: '9', icon: '9', handler_name: 'onPress_digit9', position: 10 },
-  { name: 'Left', icon: '⬅️', handler_name: 'onPress_left', position: 11 },
+  { name: 'Left', icon: 'arrow-left', handler_name: 'onPress_left', position: 11 },
 
-  { name: 'Backspace', icon: '⌫', handler_name: 'onPress_backspace', position: 12 },
+  { name: 'Backspace', icon: 'backspace', handler_name: 'onPress_backspace', position: 12 },
   { name: '0', icon: '0', handler_name: 'onPress_digit0', position: 13 },
   { name: 'Clear', icon: '=0', handler_name: 'onPress_clear', position: 14 },
-  { name: 'Right', icon: '➡️', handler_name: 'onPress_right', position: 15 }
+  { name: 'Right', icon: 'arrow-right', handler_name: 'onPress_right', position: 15 }
 ];
 
 async function main() {

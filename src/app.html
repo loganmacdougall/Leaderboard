@@ -5,7 +5,17 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link href="https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+		<script>
+			// Runs before hydration so a saved theme choice applies immediately, instead of
+			// flashing the default theme for a frame first.
+			try {
+				var stored = localStorage.getItem('theme');
+				if (stored === 'dark' || stored === 'light') {
+					document.documentElement.setAttribute('data-theme', stored);
+				}
+			} catch (e) {}
+		</script>
 
 		%sveltekit.head%
 	</head>

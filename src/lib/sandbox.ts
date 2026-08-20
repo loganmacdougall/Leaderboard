@@ -145,6 +145,12 @@ function workerBootstrapSource(): string {
         var displayFn = self[msg.fn];
         if (typeof displayFn !== 'function') throw new Error('Template has no ' + msg.fn + ' function');
         reply(true, displayFn(msg.player));
+      } else if (msg.kind === 'plusZeroColor') {
+        // Optional, like getSortDirection — most templates have no reason for a "+0"
+        // to mean anything different from "nothing to show yet", so this defaults to
+        // null (keep hiding it) rather than requiring every template to define it.
+        var plusColor = typeof self.getPlusZeroColor === 'function' ? self.getPlusZeroColor(msg.player) : null;
+        reply(true, plusColor);
       } else {
         throw new Error('Unknown message kind: ' + msg.kind);
       }
@@ -330,6 +336,13 @@ export function runSortDirection(sandbox: Sandbox): Promise<boolean> {
 
 export function runDisplayFunction(sandbox: Sandbox, fn: 'getColor' | 'getText', player: DisplayPlayer): Promise<string> {
   return call(sandbox, { kind: 'display', fn, player });
+}
+
+// Optional per-template hook: when a player's "+N" this-round indicator is exactly 0,
+// should it still be shown (e.g. to flag a locked-in bust), and in what color? Returns
+// null/undefined to keep the default (hide it), same convention as getSortDirection.
+export function runPlusZeroColor(sandbox: Sandbox, player: DisplayPlayer): Promise<string | null> {
+  return call(sandbox, { kind: 'plusZeroColor', player });
 }
 
 export function destroySandbox(sandbox: Sandbox): void {
