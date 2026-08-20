@@ -1,11 +1,15 @@
 import { SQL, sql } from "drizzle-orm";
 import { index, integer, uuid, pgTable, varchar, timestamp } from "drizzle-orm/pg-core";
+import { templateTable } from "./template";
 
 export const leaderboardTable = pgTable("leaderboard", {
   id: uuid("id").primaryKey(),
   edit_id: uuid("edit_id").defaultRandom().unique().notNull(),
   view_id: varchar("view_id", { length: 8 }).unique().notNull(),
-})
+  template_id: integer("template_id").references(() => templateTable.id).notNull(),
+}, (t) => [
+  index("leaderboard_template_id_idx").on(t.template_id),
+])
 
 export const leaderboardMetadataTable = pgTable("leaderboard_metadata", {
   leaderboard_id: uuid("leaderboard_id").primaryKey().references(() => leaderboardTable.id, { onDelete: "cascade" }),

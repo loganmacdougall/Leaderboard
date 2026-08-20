@@ -1,14 +1,24 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import HorizontalLeftSection from '$lib/components/HorizontalLeftSection.svelte';
   import HorizontalMiddleSection from '$lib/components/HorizontalMiddleSection.svelte';
-  import LeaderboardKeyboard from './LeaderboardKeyboard.svelte';
+  import LeaderboardKeyboard, { type KeyboardButtonSpec } from './LeaderboardKeyboard.svelte';
+  import { createSandbox, destroySandbox, runButtonHandler, runCellLabelFunction, type Sandbox, type ButtonSnapshot } from '$lib/sandbox';
 
-  type Cell = { id: number; display_order: number; n1: number; n2: number; s: string; leaderboard_row_id: number };
+  type Cell = {
+    id: number; display_order: number;
+    n1: number; n2: number; n3: number | null; n4: number | null;
+    n5: number | null; n6: number | null; n7: number | null; n8: number | null;
+    s: string; leaderboard_row_id: number;
+  };
   type Row = { id: number; display_order: number; cells: Cell[] };
   type Header = { id: number; display_order: number; s: string };
 
+  const NUMERIC_FIELDS = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8'] as const;
+
   let { data } = $props();
   const edit_id: string = data.edit_id;
+  const keyboards = data.template.keyboards;
 
   let name = $state(data.initial_lb.metadata.name as string);
   let headers: Header[] = $state(data.initial_lb.headers);
@@ -21,16 +31,44 @@
     ? -1
     : headers.findIndex((h: Header) => h.id === data.initial_lb.metadata.focus_header_id));
 
+  let activeKeyboardId: number | null = $state(keyboards.find((k) => k.starts)?.id ?? keyboards[0]?.id ?? null);
+  const activeKeyboard = $derived(keyboards.find((k) => k.id === activeKeyboardId));
+
   const focusedCell = $derived(
     (focusRow !== -1 && focusCol !== -1) ? rows[focusRow]?.cells[focusCol] : undefined
   );
 
-  const cellScore = (cell: Cell) => cell.s.includes('2') ? 2 * cell.n1 + cell.n2 : cell.n1 + cell.n2;
-  const isLocked = (cell: Cell) => cell.s.includes('L');
-  const cellLabel = (cell: Cell | undefined) => {
+  // The template controls what a cell's raw n1..n8/s even mean (locking, x2, whatever a
+  // future template invents), so the core editor can't format a cell's display itself —
+  // it asks the sandbox, same as the view page does for scoring/color/text.
+  let sandbox: Sandbox | null = null;
+  let cellLabels: Record<number, string> = $state({});
+
+  async function refreshLabel(cell: Cell) {
+    if (!sandbox) return;
+    try {
+      // Cells here are Svelte $state proxies — postMessage needs a plain, structured-
+      // cloneable copy, not a live reactive reference.
+      const label = await runCellLabelFunction(sandbox, { ...cell });
+      cellLabels = { ...cellLabels, [cell.id]: label };
+    } catch (e) {
+      console.error('getCellLabel failed:', e);
+    }
+  }
+
+  function cellLabel(cell: Cell | undefined) {
     if (!cell) return '';
-    return `${cellScore(cell)}${cell.s.includes('2') ? ' x2' : ''}${isLocked(cell) ? ' 🔒' : ''}`;
-  };
+    return cellLabels[cell.id] ?? '…';
+  }
+
+  onMount(() => {
+    sandbox = createSandbox(data.template.template.script);
+    for (const row of rows) for (const cell of row.cells) refreshLabel(cell);
+  });
+
+  onDestroy(() => {
+    if (sandbox) destroySandbox(sandbox);
+  });
 
   async function saveName() {
     await fetch(`/api/leaderboard/${edit_id}/update_name`, {
@@ -57,11 +95,10 @@
       await setFocus(-1, -1);
       return;
     }
-
     await setFocus(r, c);
   }
 
-  async function patchCell(cell: Cell, patch: Partial<Pick<Cell, 'n1' | 'n2' | 's'>>) {
+  async function patchCell(cell: Cell, patch: Record<string, number | string>) {
     Object.assign(cell, patch);
     await fetch(`/api/leaderboard/${edit_id}/cell/${cell.id}`, {
       method: 'PATCH',
@@ -70,67 +107,69 @@
     });
   }
 
-  const addNCell = (n: number) => {
-    const cell = focusedCell;
-    if (!cell || isLocked(cell)) return;
-    patchCell(cell, { n1: cell.n1 + n });
-  };
-
-  const setCellZero = () => {
-    const cell = focusedCell;
-    if (!cell || isLocked(cell)) return;
-    patchCell(cell, { n1: 0, n2: 0 });
-  };
-
-  const toggleX2 = () => {
-    const cell = focusedCell;
-    if (!cell || isLocked(cell)) return;
-    patchCell(cell, { s: cell.s.includes('2') ? cell.s.replace('2', '') : cell.s + '2' });
-  };
-
-  const setLock = (locked: boolean) => {
-    const cell = focusedCell;
-    if (!cell) return;
-    const base = cell.s.replace('L', '');
-    patchCell(cell, { s: locked ? base + 'L' : base });
-  };
-
   async function addRow() {
     const res = await fetch(`/api/leaderboard/${edit_id}/row`, { method: 'POST' });
-    if (!res.ok) return;
+    if (!res.ok) return null;
     const { row } = await res.json();
     rows.push(row);
+    for (const cell of row.cells as Cell[]) refreshLabel(cell);
     return row;
   }
 
-  const focusDown = async () => {
-    if (focusRow === -1) {
-      if (rows.length === 0) await addRow();
-      const col = focusCol === -1 ? (headers.length > 0 ? 0 : -1) : focusCol;
-      await setFocus(0, col);
+  async function onButtonPress(button: KeyboardButtonSpec) {
+    if (!sandbox) return;
+
+    const snapshot: ButtonSnapshot = {
+      rows: rows.map((r) => ({ id: r.id, cells: r.cells.map((c) => ({ ...c })) })),
+      columnCount: headers.length,
+      focusRow,
+      focusCol
+    };
+
+    let result;
+    try {
+      result = await runButtonHandler(sandbox, button.handler_name, snapshot);
+    } catch (e) {
+      console.error(`Button "${button.name}" failed:`, e);
       return;
     }
 
-    if (focusRow === rows.length - 1) {
-      await addRow();
+    const changedCells: Cell[] = [];
+    for (const resultRow of result.rows) {
+      const localRow = rows.find((r) => r.id === resultRow.id);
+      if (!localRow) continue;
+
+      for (const resultCell of resultRow.cells) {
+        const localCell = localRow.cells.find((c) => c.id === resultCell.id);
+        if (!localCell) continue;
+
+        const patch: Record<string, number | string> = {};
+        for (const field of NUMERIC_FIELDS) {
+          if (localCell[field] !== resultCell[field]) patch[field] = resultCell[field] as number;
+        }
+        if (localCell.s !== resultCell.s) patch.s = resultCell.s;
+
+        if (Object.keys(patch).length > 0) {
+          await patchCell(localCell, patch);
+          changedCells.push(localCell);
+        }
+      }
+    }
+    for (const cell of changedCells) refreshLabel(cell);
+
+    if (result.requestedKeyboard) {
+      const kb = keyboards.find((k) => k.name === result.requestedKeyboard);
+      if (kb) activeKeyboardId = kb.id;
     }
 
-    await setFocus(focusRow + 1, focusCol);
-  };
-
-  const focusUp = async () => {
-    if (focusRow > 0) await setFocus(focusRow - 1, focusCol);
-  };
-
-  const focusLeft = async () => {
-    if (focusCol === -1 || headers.length === 0) return;
-    await setFocus(focusRow, focusCol > 0 ? focusCol - 1 : headers.length - 1);
-  };
-
-  const focusRight = async () => {
-    if (focusCol === -1 || headers.length === 0) return;
-    await setFocus(focusRow, focusCol < headers.length - 1 ? focusCol + 1 : 0);
-  };
+    if (result.requestedFocus) {
+      while (result.requestedFocus.row >= rows.length) {
+        const newRow = await addRow();
+        if (!newRow) break;
+      }
+      await setFocus(result.requestedFocus.row, result.requestedFocus.col);
+    }
+  }
 
   const addHeader = async () => {
     const res = await fetch(`/api/leaderboard/${edit_id}/header`, { method: 'POST' });
@@ -141,6 +180,7 @@
       const row = rows.find((r) => r.id === cell.leaderboard_row_id);
       if (row) row.cells.push(cell);
     }
+    for (const cell of cells as Cell[]) refreshLabel(cell);
   };
 
   const removeHeaderAt = async (i: number) => {
@@ -191,7 +231,6 @@
         <th>
           <div style="display: flex; flex-direction: row;">
             <button class="header_button" onclick={addHeader}>+</button>
-            <button class="header_button" onclick={focusDown}>⬇️</button>
           </div>
         </th>
         {#each headers as _, i}
@@ -223,35 +262,15 @@
   </table>
 </div>
 
-
-
-<LeaderboardKeyboard labels={
-  ["+1", "+2", "+3", "=0", "x2", "+4", "+5", "+6", "⬇️", "⬆️", "+7", "+8", "+9", "⬅️", "➡️", "+10", "+11", "+12", "🔒", "🔑"]
-}
-listeners={[
-  () => { addNCell(1) },
-  () => { addNCell(2) },
-  () => { addNCell(3) },
-  () => { setCellZero() },
-  () => { toggleX2() },
-  () => { addNCell(4) },
-  () => { addNCell(5) },
-  () => { addNCell(6) },
-  focusDown,
-  focusUp,
-  () => { addNCell(7) },
-  () => { addNCell(8) },
-  () => { addNCell(9) },
-  focusLeft,
-  focusRight,
-  () => { addNCell(10) },
-  () => { addNCell(11) },
-  () => { addNCell(12) },
-  () => { setLock(true) },
-  () => { setLock(false) },
-]}
-cols={5}
-label={focusedCell ? `${headers[focusCol]?.s}: ${cellLabel(focusedCell)}` : ""}/>
+{#if activeKeyboard}
+  <LeaderboardKeyboard
+    buttons={activeKeyboard.buttons}
+    columns={activeKeyboard.columns}
+    rows={activeKeyboard.rows}
+    onPress={onButtonPress}
+    label={focusedCell ? `${headers[focusCol]?.s}: ${cellLabel(focusedCell)}` : ""}
+  />
+{/if}
 
 <style>
   .table-container {

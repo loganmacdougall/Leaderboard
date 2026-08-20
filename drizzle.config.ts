@@ -14,6 +14,10 @@ export default defineConfig({
   out: './drizzle',
   schema: './src/lib/server/schema',
   dialect: 'postgresql',
+  // Only manage the app's own schema — leave pg_cron's `cron` schema (and anything else
+  // outside our tables) alone. Without this, `db:push` diffs the whole database and will
+  // offer to drop the cron extension's schema/jobs since they aren't declared here.
+  schemaFilter: ['public'],
   dbCredentials: {
     url: db_url,
   },

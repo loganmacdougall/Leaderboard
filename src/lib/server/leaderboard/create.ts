@@ -3,7 +3,7 @@ import { leaderboardMetadataTable, leaderboardTable } from '../schema/leaderboar
 
 const VIEW_ID_POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-export async function createLeaderboard() {
+export async function createLeaderboard(template_id: number) {
     const MAX_RETRIES = 5;
 
     let cached_error: Error | null = null;
@@ -11,13 +11,14 @@ export async function createLeaderboard() {
         const id = crypto.randomUUID();
         const edit_id = crypto.randomUUID();
         const view_id = Array.from({ length: 8 }, () => VIEW_ID_POOL[Math.floor(Math.random() * VIEW_ID_POOL.length)]).join("");
-        
+
         try {
             await db.transaction(async (tx) => {
                 await tx.insert(leaderboardTable).values({
                     id,
                     edit_id,
-                    view_id
+                    view_id,
+                    template_id
                 });
                 await tx.insert(leaderboardMetadataTable).values({
                     leaderboard_id: id,
